@@ -78,11 +78,23 @@
     return list;
   }
 
+  // Coba alamat pertama (biasanya utama) sampai 2x dulu — tunnel utama
+  // yang sedang sambung ulang hanya butuh beberapa detik, dan tetap di
+  // alamat yang sama berarti sesi login tidak hilang. Link alternatif
+  // baru dipakai bila utama benar-benar mati, karena pindah alamat di
+  // browser berarti sesi baru (harus masuk lagi).
+  function tryOrdered(list) {
+    var first = list[0], second = list[1];
+    return probe(first)
+      .catch(function () { return probe(first); })
+      .catch(function () { return second ? probe(second) : Promise.reject(new Error("down")); });
+  }
+
   function go() {
     freshUrls().then(function (fresh) {
       var list = URLS.slice();
       if (fresh) fresh.forEach(function (u) { if (list.indexOf(u) < 0) list.push(u); });
-      return Promise.any(ordered(list).map(probe));
+      return tryOrdered(ordered(list));
     }).then(function (url) {
       try { localStorage.setItem("yummyfoodtgr_last_good", url); } catch (e) {}
       location.replace(url + "/");
