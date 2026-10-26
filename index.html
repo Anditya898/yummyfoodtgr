@@ -30,9 +30,11 @@
 <script>
 (function () {
   var URLS = ["https://e5f753d86897cc.lhr.life", "https://8f433d1760349f05-87-81-230-108.serveousercontent.com"];
-  var TIMEOUT_MS = 4000;
+  var TIMEOUT_MS = 8000;
   var RETRY_MS = 5000;
-  var statusEl = document.getElementById("status");
+  // Teks status sengaja tidak pernah diubah: hanya salam pembuka.
+  // (Dulu: "Mengecek server…" / "Server sedang tersambung ulang…" —
+  // dihapus atas permintaan pengguna.)
 
   function probe(url) {
     var ctrl = new AbortController();
@@ -42,10 +44,28 @@
       .catch(function () { clearTimeout(timer); throw new Error("down"); });
   }
 
-  function ordered() {
+  // Ambil daftar alamat terbaru dari urls.json (diperbarui tiap 15 detik
+  // oleh updater) supaya halaman yang ter-cache lama pun tetap tahu alamat
+  // tunnel yang sedang hidup — tanpa menunggu muat ulang 60 detik.
+  function freshUrls() {
+    var ctrl = new AbortController();
+    var timer = setTimeout(function () { ctrl.abort(); }, 3000);
+    return fetch("urls.json?_=" + Date.now(), { signal: ctrl.signal, cache: "no-store" })
+      .then(function (r) { clearTimeout(timer); return r.ok ? r.json() : null; })
+      .then(function (j) {
+        if (!j) return null;
+        var out = [];
+        [j.main, j.alt].forEach(function (u) {
+          if (typeof u === "string" && u.indexOf("http") === 0 && out.indexOf(u) < 0) out.push(u);
+        });
+        return out.length ? out : null;
+      })
+      .catch(function () { clearTimeout(timer); return null; });
+  }
+
+  function ordered(list) {
     var lastGood = null;
     try { lastGood = localStorage.getItem("yummyfoodtgr_last_good"); } catch (e) {}
-    var list = URLS.slice();
     if (lastGood && list.indexOf(lastGood) > 0) {
       list.splice(list.indexOf(lastGood), 1);
       list.unshift(lastGood);
@@ -54,14 +74,14 @@
   }
 
   function go() {
-    var list = ordered();
-    statusEl.textContent = "Mengecek server yang sedang aktif…";
-    Promise.any(list.map(probe)).then(function (url) {
+    freshUrls().then(function (fresh) {
+      var list = URLS.slice();
+      if (fresh) fresh.forEach(function (u) { if (list.indexOf(u) < 0) list.push(u); });
+      return Promise.any(ordered(list).map(probe));
+    }).then(function (url) {
       try { localStorage.setItem("yummyfoodtgr_last_good", url); } catch (e) {}
-      statusEl.textContent = "Server ditemukan, membuka aplikasi…";
       location.replace(url + "/");
     }).catch(function () {
-      statusEl.textContent = "Server sedang tersambung ulang, mencoba lagi otomatis…";
       setTimeout(go, RETRY_MS);
     });
   }
