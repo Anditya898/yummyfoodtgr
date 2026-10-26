@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>YummyFoodTgr</title>
+<style>
+  body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; background: #faf6f0; color: #1f2937; display: flex; min-height: 100vh; margin: 0; align-items: center; justify-content: center; text-align: center; }
+  .card { background: #fff; border-radius: 16px; box-shadow: 0 4px 24px rgba(0,0,0,.08); padding: 32px 28px; max-width: 420px; margin: 16px; }
+  h1 { color: #ea580c; margin: 0 0 8px; font-size: 28px; }
+  p { margin: 8px 0; line-height: 1.5; }
+  .spin { width: 28px; height: 28px; border: 3px solid #fed7aa; border-top-color: #ea580c; border-radius: 50%; margin: 16px auto; animation: s 1s linear infinite; }
+  @keyframes s { to { transform: rotate(360deg); } }
+  a { color: #ea580c; word-break: break-all; }
+  .links { font-size: 13px; color: #6b7280; margin-top: 16px; }
+  #status { font-weight: 600; }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>YummyFoodTgr</h1>
+  <div class="spin" id="spin"></div>
+  <p id="status">Membuka aplikasi, mohon tunggu…</p>
+  <p class="links">Kalau tidak terbuka otomatis, ketuk salah satu tautan ini:<br>
+    <a id="linkA" href="https://054b13e88c2bed.lhr.life">Link utama</a><br>
+    <a id="linkB" href="https://cd2274f976b222cf-87-81-244-16.serveousercontent.com">Link alternatif</a>
+  </p>
+  <noscript><p><b>Aktifkan JavaScript</b> agar halaman ini bisa meneruskan kamu otomatis ke server yang sedang aktif.</p></noscript>
+</div>
+<script>
+(function () {
+  var URLS = ["https://054b13e88c2bed.lhr.life", "https://cd2274f976b222cf-87-81-244-16.serveousercontent.com"];
+  var TIMEOUT_MS = 4000;
+  var RETRY_MS = 5000;
+  var statusEl = document.getElementById("status");
+
+  function probe(url) {
+    var ctrl = new AbortController();
+    var timer = setTimeout(function () { ctrl.abort(); }, TIMEOUT_MS);
+    return fetch(url + "/login", { mode: "no-cors", signal: ctrl.signal, cache: "no-store" })
+      .then(function () { clearTimeout(timer); return url; })
+      .catch(function () { clearTimeout(timer); throw new Error("down"); });
+  }
+
+  function ordered() {
+    var lastGood = null;
+    try { lastGood = localStorage.getItem("yummyfoodtgr_last_good"); } catch (e) {}
+    var list = URLS.slice();
+    if (lastGood && list.indexOf(lastGood) > 0) {
+      list.splice(list.indexOf(lastGood), 1);
+      list.unshift(lastGood);
+    }
+    return list;
+  }
+
+  function go() {
+    var list = ordered();
+    statusEl.textContent = "Mengecek server yang sedang aktif…";
+    Promise.any(list.map(probe)).then(function (url) {
+      try { localStorage.setItem("yummyfoodtgr_last_good", url); } catch (e) {}
+      statusEl.textContent = "Server ditemukan, membuka aplikasi…";
+      location.replace(url + "/");
+    }).catch(function () {
+      statusEl.textContent = "Server sedang tersambung ulang, mencoba lagi otomatis…";
+      setTimeout(go, RETRY_MS);
+    });
+  }
+
+  // Muat ulang halaman tiap 60 detik saat belum berhasil, supaya alamat
+  // terbaru dari server selalu terpakai.
+  var reloadTimer = setTimeout(function () { location.reload(); }, 60000);
+  var _replace = location.replace.bind(location);
+  location.replace = function (u) { clearTimeout(reloadTimer); _replace(u); };
+
+  go();
+})();
+</script>
+</body>
+</html>
