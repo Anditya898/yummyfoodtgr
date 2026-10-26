@@ -34,11 +34,18 @@
   var RETRY_MS = 5000;
   // Teks status sengaja tidak pernah diubah: hanya salam pembuka.
 
+  // Probe memakai /sehat (200 + header CORS) dan WAJIB r.ok — supaya
+  // respons 502 dari tunnel yang mati tidak dianggap "hidup" (dulu fetch
+  // no-cors ke /login menganggap semua status HTTP sebagai hidup).
   function probe(url) {
     var ctrl = new AbortController();
     var timer = setTimeout(function () { ctrl.abort(); }, TIMEOUT_MS);
-    return fetch(url + "/login", { mode: "no-cors", signal: ctrl.signal, cache: "no-store" })
-      .then(function () { clearTimeout(timer); return url; })
+    return fetch(url + "/sehat", { signal: ctrl.signal, cache: "no-store" })
+      .then(function (r) {
+        clearTimeout(timer);
+        if (r.ok) return url;
+        throw new Error("down");
+      })
       .catch(function () { clearTimeout(timer); throw new Error("down"); });
   }
 
